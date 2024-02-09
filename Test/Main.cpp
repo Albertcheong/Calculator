@@ -4,6 +4,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 
 // define custom WINDOWS MESSAGES
 #define WM_APP_INITIALIZE (WM_APP + 1)
@@ -90,7 +91,7 @@ class BaseWindow
 class Calculator : public BaseWindow
 {
 	public:
-	Calculator() : m_hEdit(nullptr), m_hButton{} {}
+	Calculator() : m_hEdit(nullptr) {}
 	~Calculator() {}
 
 	void init()
@@ -114,19 +115,43 @@ class Calculator : public BaseWindow
 		int nFieldWidth   =  4;
 		int nFieldHeight  =  5;
 
-		LPCWSTR lpwszButtonText[20] = { L"CE", L"C", L"\u232B ", L"/", L"7", L"8", L"9", L"x", L"4", L"5", L"6", L"-", L"1", L"2", L"3", L"+", L"+/-", L"0", L".", L"=" };
+		m_buttons = {
+			{BUTTON_CE,        L"CE"    },
+			{BUTTON_C,         L"C"     },
+			{BUTTON_BACKSPACE, L"\u232B"},
+			{BUTTON_DIV,       L"/"     },
+			{BUTTON_SEVEN,     L"7"     },
+			{BUTTON_EIGHT,     L"8"     },
+			{BUTTON_NINE,      L"9"     },
+			{BUTTON_MUL,       L"x"     },
+			{BUTTON_FOUR,      L"4"     },
+			{BUTTON_FIVE,      L"5"     },
+			{BUTTON_SIX,       L"6"     },
+			{BUTTON_SUB,       L"-"     },
+			{BUTTON_ONE,       L"1"     },
+			{BUTTON_TWO,       L"2"     },
+			{BUTTON_THREE,     L"3"     },
+			{BUTTON_ADD,       L"+"     },
+			{BUTTON_NEGATE,    L"+/-"   },
+			{BUTTON_ZERO,      L"0"     },
+			{BUTTON_FL_POINT,  L"."     },
+			{BUTTON_EQUAL,     L"="     }
+		};
 		
 		for (int y = 0; y < nFieldHeight; y++)
 			for (int x = 0; x < nFieldWidth; x++)
+			{
+				auto& buttonInfo = m_buttons[x + nFieldWidth * y];
 				CreateWindowEx(
 					NULL,
 					L"Button",
-					lpwszButtonText[x + nFieldWidth * y],
+					buttonInfo.label.c_str(),
 					WS_CHILD | WS_VISIBLE | BS_CENTER,
 
 					BUTTON_SPACING + x * (nButtonWidth + BUTTON_SPACING), 100 + y * (nButtonHeight + BUTTON_SPACING),
-					nButtonWidth, nButtonHeight, m_hwnd, reinterpret_cast<HMENU>(x + nFieldWidth * y + 1), m_hInstance, NULL
+					nButtonWidth, nButtonHeight, m_hwnd, reinterpret_cast<HMENU>(buttonInfo.id), m_hInstance, NULL
 				);
+			}
 	}
 
 	void handleButtonClick(WPARAM ButtonID)
@@ -211,7 +236,7 @@ class Calculator : public BaseWindow
 					std::size_t size = GetWindowTextLength(m_hEdit);
 					if (size > 0)
 					{
-						std::wstring text = currentEditText();
+						std::wstring text = getEditControlText();
 						if (text[0] != L'0')
 						{
 							if (text[0] == L'-')
@@ -234,6 +259,7 @@ class Calculator : public BaseWindow
 				break;
 
 			case BUTTON_FL_POINT:
+				appendEdit(L'.');
 				break;
 
 			case BUTTON_EQUAL:
@@ -253,36 +279,38 @@ class Calculator : public BaseWindow
 		if (GetWindowTextLength(m_hEdit) < MAX_CHAR_DISPLAY)
 		{
 			std::wstring newText;
-			if (currentEditText()[0] == L'0' && GetWindowTextLength(m_hEdit) == 1 && buttonText != L'.')
+			if (getEditControlText()[0] == L'0' && GetWindowTextLength(m_hEdit) == 1 && buttonText != L'.')
 			{
 				newText = buttonText;
 			}
 			else
 			{
-				newText = std::wstring(currentEditText()) + buttonText;
+				newText = getEditControlText() + buttonText;
 			}
 
 			SetWindowText(m_hEdit, newText.c_str());
 		}
 	}
 
-	LPWSTR currentEditText() // without null - termination char and resize to accept an - extra member (should always be accompanied with.c_str()) 
+	std::wstring getEditControlText()
 	{
-		static std::wstring s_buffer;
-		std::size_t length = GetWindowTextLength(m_hEdit);
-
-		s_buffer.resize(length + 1);
-		GetWindowText(m_hEdit, &s_buffer[0], length + 1);
-		return &s_buffer[0];
+		const int kBufferSize = MAX_CHAR_DISPLAY;
+		wchar_t szBuffer[kBufferSize];
+		GetWindowText(m_hEdit, szBuffer, kBufferSize);
+		return std::wstring(szBuffer);
 	}
 
 	PCWSTR getClassName() const override { return L"Simple Calculator"; }
 
 	private:
 	HWND m_hEdit;
-	HWND m_hButton[20];
 
-	int nCount = 0;
+	struct Button
+	{
+		int id;
+		std::wstring label;
+	};
+	std::vector<Button> m_buttons;
 };
 
 // global variables
