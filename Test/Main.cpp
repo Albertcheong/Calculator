@@ -5,6 +5,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <stack>
+#include <queue>
 
 // define custom WINDOWS MESSAGES
 #define WM_APP_INITIALIZE (WM_APP + 1)
@@ -184,6 +186,7 @@ class Calculator : public BaseWindow
 				break;
 
 			case BUTTON_DIV:
+				appendEdit(L'/');
 				break;
 
 			case BUTTON_SEVEN:
@@ -199,6 +202,7 @@ class Calculator : public BaseWindow
 				break;
 
 			case BUTTON_MUL:
+				appendEdit(L'*');
 				break;
 
 			case BUTTON_FOUR:
@@ -214,6 +218,7 @@ class Calculator : public BaseWindow
 				break;
 
 			case BUTTON_SUB:
+				appendEdit(L'-');
 				break;
 
 			case BUTTON_ONE:
@@ -229,6 +234,7 @@ class Calculator : public BaseWindow
 				break;
 
 			case BUTTON_ADD:
+				appendEdit(L'+');
 				break;
 
 			case BUTTON_NEGATE:
@@ -263,6 +269,19 @@ class Calculator : public BaseWindow
 				break;
 
 			case BUTTON_EQUAL:
+				std::wstring outputString;
+				try
+				{
+					double result = evaluateExpression(getEditControlText());
+					outputString = std::to_wstring(result);
+				}
+				catch (const std::exception& error)
+				{
+					outputString = std::wstring(error.what(), error.what() + strlen(error.what()));
+				}
+
+				//MessageBox(NULL, std::to_wstring(result).c_str(), L"ERROR", MB_OK | MB_ICONINFORMATION);
+				SetWindowText(m_hEdit, outputString.c_str());
 				break;
 		}
 	}
@@ -281,11 +300,11 @@ class Calculator : public BaseWindow
 			std::wstring newText;
 			if (getEditControlText()[0] == L'0' && GetWindowTextLength(m_hEdit) == 1 && buttonText != L'.')
 			{
-				newText = buttonText;
+				newText += buttonText;
 			}
 			else
 			{
-				newText = getEditControlText() + buttonText;
+				newText += getEditControlText() + buttonText;
 			}
 
 			SetWindowText(m_hEdit, newText.c_str());
@@ -298,6 +317,121 @@ class Calculator : public BaseWindow
 		wchar_t szBuffer[kBufferSize];
 		GetWindowText(m_hEdit, szBuffer, kBufferSize);
 		return std::wstring(szBuffer);
+	}
+
+	bool isOperator(wchar_t ch)
+	{
+		return ch == L'+' || ch == L'-' || ch == L'*' || ch == L'/';
+	}
+
+	int precedence(wchar_t ch)
+	{
+		if (ch == L'+' || ch == L'-') return 1;
+		if (ch == L'*' || ch == L'/') return 2;
+		return 0;
+	}
+
+	double calculate(double a, double b, wchar_t op)
+	{
+		switch (op)
+		{
+			case L'+':
+				return a + b;
+
+			case L'-':
+				return a - b;
+
+			case L'*':
+				return a * b;
+
+			case L'/':
+				if (b == 0)
+					throw std::invalid_argument("Can't divide by zero");
+
+				return a / b;
+
+			default:
+				throw std::invalid_argument("Invalid Operator");
+		}
+	}
+
+	double evaluateExpression(const std::wstring& expression)
+	{
+		std::stack<wchar_t> operatorStack;
+		std::queue<std::wstring> outputQueue;
+		std::wstring num;
+
+		for (int i = 0; i < expression.size(); i++)
+		{
+			wchar_t ch = expression[i];
+
+			if (iswspace(ch))
+				continue;
+
+			else if (iswdigit(ch) || ch == L'.' || (ch == L'-' && (i == 0 || isOperator(expression[i - 2]))))
+				num += ch;
+
+			else if (isOperator(ch))
+			{
+				outputQueue.push(num);
+				num.clear();
+
+				while (!operatorStack.empty() && precedence(operatorStack.top()) >= precedence(ch))
+				{
+					outputQueue.push(std::wstring(1, operatorStack.top()));
+					operatorStack.pop();
+				}
+
+				operatorStack.push(ch);
+			}
+
+			else
+				throw std::invalid_argument("Invalid Character!");
+		}
+
+		if (!num.empty())
+		{
+			outputQueue.push(num);
+			num.clear();
+		}
+
+		while (!operatorStack.empty())
+		{
+			outputQueue.push(std::wstring(1, operatorStack.top()));
+			operatorStack.pop();
+		}
+
+		std::stack<double> resultStack;
+		while (!outputQueue.empty())
+		{
+			std::wstring token = outputQueue.front();
+			outputQueue.pop();
+
+			if (iswdigit(token[0]) || token[0] == L'-' && token.size() > 1)
+				resultStack.push(std::stod(token));
+
+			else if (isOperator(token[0]))
+			{
+				if (resultStack.size() < 2)
+					throw std::invalid_argument("Invalid Expression");
+
+				double b = resultStack.top();
+				resultStack.pop();
+
+				double a = resultStack.top();
+				resultStack.pop();
+
+				resultStack.push(calculate(a, b, token[0]));
+			}
+
+			else
+				throw std::invalid_argument("Invalid Token in Expression");
+		}
+
+		if (resultStack.size() != 1)
+			throw std::invalid_argument("Invalid Expression");
+
+		return resultStack.top();
 	}
 
 	PCWSTR getClassName() const override { return L"Simple Calculator"; }
